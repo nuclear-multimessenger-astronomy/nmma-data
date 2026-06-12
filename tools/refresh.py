@@ -51,12 +51,22 @@ def _warm_with_retries(fetch, names: list[str], kind: str, attempts: int) -> Non
     print(f"{kind}: {cached}/{len(names)} cached, {len(failed)} skipped")
 
 
+def _purge_empty(root: Path) -> None:
+    """Delete zero-byte files left behind by truncated downloads so the next
+    refresh re-fetches them instead of treating them as cached."""
+    for f in root.rglob("*"):
+        if f.is_file() and f.stat().st_size == 0 and f.name != ".gitkeep":
+            print(f"  purging empty {f.relative_to(REPO_ROOT)}", file=sys.stderr)
+            f.unlink()
+
+
 def refresh_sncosmo(attempts: int, include_models: bool) -> None:
     import sncosmo
     from sncosmo.bandpasses import _BANDPASSES
 
     # Relocate sncosmo's cache into the repo so downloads land in ./sncosmo.
     SNCOSMO_DIR.mkdir(parents=True, exist_ok=True)
+    _purge_empty(SNCOSMO_DIR)
     sncosmo.conf.data_dir = str(SNCOSMO_DIR)
 
     bandpasses = [m["name"] for m in _BANDPASSES.get_loaders_metadata() if m.get("name")]
